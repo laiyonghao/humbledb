@@ -9,14 +9,15 @@ from pytool.proxy import DictProxy, ListProxy
 class NameMap(six.text_type):
     """ This class is used to map attribute names to document keys internally.
     """
-    def __new__(cls, value=''):
+    def __new__(cls, value='', type=UNSET):
         if six.PY3:
             return super().__new__(cls, value)
         else:
             return super(NameMap, cls).__new__(cls, value)
 
-    def __init__(self, value=''):
+    def __init__(self, value='', type=UNSET):
         self._key = value.split('.')[-1]
+        self._type = type
         self._default_value = UNSET
         # TODO: Remove this later after Python3 is working
         # super(NameMap, self).__init__(value)
@@ -26,6 +27,10 @@ class NameMap(six.text_type):
         # We don't map leading underscore names, so we cheat by storing our key
         # in a private var, and then get it back out again
         return self._key
+
+    @property
+    def type(self):
+        return self._type
 
     def _default(self, doc, key, reverse_name_map):
         """ Return the default value for this name map. """

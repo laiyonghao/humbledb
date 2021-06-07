@@ -22,7 +22,11 @@ COLLECTION_METHODS = set([_ for _ in dir(pymongo.collection.Collection) if not
 del _ # This is necessary since _ lingers in the module namespace otherwise
 
 
-class Embed(six.text_type):
+class Field(six.text_type):
+    type = UNSET
+
+
+class Embed(Field):
     """ This class is used to map attribute names on embedded subdocuments.
 
         Example usage::
@@ -146,12 +150,14 @@ class DocumentMeta(type):
         name_map = NameMap()
         reverse_name_map = NameMap()
         saved_defaults = {}
+        saved_types = {}
         for base in reversed(bases):
             if issubclass(base, Document):
                 name_map.merge(getattr(base, '_name_map', NameMap()))
                 reverse_name_map.merge(getattr(base, '_reverse_name_map',
                     NameMap()))
                 saved_defaults.update(getattr(base, '_saved_defaults', {}))
+                saved_types.update(getattr(base, '_saved_types', {}))
 
         # Always have an _id attribute
         if '_id' not in cls_dict and '_id' not in name_map:
@@ -183,11 +189,18 @@ class DocumentMeta(type):
 
             # Handle default values if we have them
             default = UNSET
+            field_type = UNSET
             if isinstance(value, tuple):
                 # We only look at tuples with length 2
-                if len(value) != 2:
+                if len(value) == 3:
+                    value, default, field_type = value
+                elif len(value) == 2:
+                    value, default = value
+                    # No default, but typed.
+                    if isinstance(default, type):
+                        field_type, default = default, UNSET
+                else:
                     continue
-                value, default = value
                 # Check that the tuple's first value is a string key
                 if not isinstance(value, six.string_types):
                     continue
@@ -195,6 +208,8 @@ class DocumentMeta(type):
                 # we memoize it for later
                 if default is not UNSET and callable(default):
                     saved_defaults[value] = default
+                if field_type is not UNSET:
+                    saved_types[value] = field_type
 
             # Remove the defining attribute from the class namespace
             cls_dict.pop(name)
@@ -206,7 +221,7 @@ class DocumentMeta(type):
             else:
                 # Regular attributes are converted to name map objects as well
                 reverse_value = NameMap(name)
-                value = NameMap(value)
+                value = NameMap(value, saved_types.get(value))
                 # If the default value isn't callable, then we memoize it in
                 # the name map for later retrieval
                 if not callable(default):
@@ -224,6 +239,9 @@ class DocumentMeta(type):
 
         # Create saved default value attribute
         cls_dict['_saved_defaults'] = saved_defaults
+
+        # Create saved type attribute
+        cls_dict['_saved_types'] = saved_types
 
         # Create the class
         cls = type.__new__(mcs, cls_name, bases, cls_dict)
@@ -531,6 +549,9 @@ class Document(dict):
         # If it's mapped, let's map it!
         if name in name_map:
             key = name_map[name]
+            # XXX check value type?
+            # if not isinstance(value, key.type):
+            #     raise TypeError(f'Argument `value` must be a {key.type.__name__}, not {type(value).__name__}')
             if isinstance(key, NameMap):
                 key = key.key
             # Assign the mapped key
@@ -586,3 +607,14 @@ class Document(dict):
                 """
                 cls._ensured = False
 
+    def validate_type(self):
+        ''' Check value type. '''
+        name_map = object.__getattribute__(self, '_name_map')
+        # print('name_map', dict(name_map))
+        for k, v in name_map.filtered().items():
+            # print('name_map', k, v, v.type)
+            value = getattr(self, k, None)
+            if value not in (None, UNSET) and (not isinstance(value, v.type)):
+                return False
+
+        return True
