@@ -92,6 +92,7 @@ class DictMap(DictProxy):
     def __init__(self, value, name_map, parent, key, reverse_name_map):
         self._parent = parent
         self._key = key
+        # print('DictMap: ', name_map)
         self._name_map = name_map
         self._reverse_name_map = reverse_name_map
         super(DictMap, self).__init__(value)
@@ -141,6 +142,7 @@ class DictMap(DictProxy):
         # Exclude private names from this behavior
         if name.startswith('_'):
             return object.__setattr__(self, name, value)
+        # print('DictMap name_map:', self._name_map.__dict__, name)
 
         if name not in self._name_map:
             raise AttributeError("{!r} is not a mapped attribute".format(name))
@@ -228,6 +230,8 @@ class ListMap(ListProxy):
     def __init__(self, value, name_map, parent, key, reverse_name_map):
         self._parent = parent
         self._key = key
+        # print('list name_map: ', name_map.__dict__, parent, key, reverse_name_map)
+        # raise
         self._name_map = name_map
         self._reverse_name_map = reverse_name_map
         super(ListMap, self).__init__(value)

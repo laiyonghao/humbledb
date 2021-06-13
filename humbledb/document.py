@@ -1,6 +1,7 @@
 """
 """
 import logging
+import collections
 from functools import wraps
 
 import six
@@ -46,19 +47,22 @@ class Embed(Field):
         else:
             return super(Embed, cls).__new__(cls, value)
 
-    def as_name_map(self, base_name):
+    def as_name_map(self, base_name, _type=UNSET):
         """ Return this object mapped onto :class:`~humbledb.maps.NameMap`
         objects. """
-        name_map = NameMap(base_name)
-
+        name_map = NameMap(base_name, _type)
+        # print('as_name_map:', base_name, self.__dict__)
         for name, value in self.__dict__.items():
             # Skip most everything
-            if not isinstance(value, six.string_types):
+            if not isinstance(value, (six.string_types, tuple)):
                 continue
             # Skip private stuff
             if name.startswith('_'):
                 continue
 
+            _type = UNSET
+            if isinstance(value, tuple):
+                value, _type = value
             # Concatonate names
             if base_name:
                 cname = base_name + '.' + value
@@ -69,7 +73,7 @@ class Embed(Field):
                 setattr(name_map, name, value)
             else:
                 # Create a new subattribute
-                setattr(name_map, name, NameMap(cname))
+                setattr(name_map, name, NameMap(cname, _type))
 
         return name_map
 
@@ -80,18 +84,21 @@ class Embed(Field):
 
         for name, value in self.__dict__.items():
             # Skip most everything
-            if not isinstance(value, six.string_types):
+            if not isinstance(value, (six.string_types, tuple)):
                 continue
             # Skip private stuff
             if name.startswith('_'):
                 continue
 
+            _type = UNSET
+            if isinstance(value, tuple):
+                value, _type = value
             # Recursively map
             if isinstance(value, Embed):
                 reverse_value = value.as_reverse_name_map(name)
             else:
                 # Create a new subattribute
-                reverse_value = NameMap(name)
+                reverse_value = NameMap(name, _type)
 
             setattr(name_map, value, reverse_value)
 
@@ -183,7 +190,9 @@ class DocumentMeta(type):
             # Skip private stuff
             if name.startswith('_') and name != '_id':
                 continue
-
+            # print('field name: ', name)
+            # if name == 'day':
+            #     raise
             value = cls_dict.get(name)
             reverse_value = name
 
@@ -216,8 +225,9 @@ class DocumentMeta(type):
 
             # Convert Embed objects to nested name map objects
             if isinstance(value, Embed):
+                # print('Embed', name, value)
                 reverse_value = value.as_reverse_name_map(name)
-                value = value.as_name_map(value)
+                value = value.as_name_map(value, Embed)
             else:
                 # Regular attributes are converted to name map objects as well
                 reverse_value = NameMap(name)
@@ -549,6 +559,7 @@ class Document(dict):
         # If it's mapped, let's map it!
         if name in name_map:
             key = name_map[name]
+            # print(f'set {name} with {key}, {type(key)}')
             # XXX check value type?
             # if not isinstance(value, key.type):
             #     raise TypeError(f'Argument `value` must be a {key.type.__name__}, not {type(value).__name__}')
@@ -610,11 +621,23 @@ class Document(dict):
     def validate_type(self):
         ''' Check value type. '''
         name_map = object.__getattribute__(self, '_name_map')
-        # print('name_map', dict(name_map))
+        return self._validate_type_of_doc(name_map, self)
+
+    def _validate_type_of_doc(self, name_map, doc):
         for k, v in name_map.filtered().items():
-            # print('name_map', k, v, v.type)
-            value = getattr(self, k, None)
-            if value not in (None, UNSET) and (not isinstance(value, v.type)):
+            value = getattr(doc, k, None)
+            # print('VVV1:', k, v, v.type, v.type is Embed, type(value), isinstance(value, collections.MutableSequence), value)
+            if v.type is Embed:
+                if isinstance(value, collections.MutableSequence):
+                    for item in value:
+                        # print('VVV:', k, v, v.filtered(), item)
+                        if not self._validate_type_of_doc(v, item):
+                            return False
+                else:
+                    if not self._validate_type_of_doc(v, value):
+                        return False
+            elif value not in (None, UNSET) and (not isinstance(value, v.type)):
+                # print('v', k, type(k), value, v.filtered(), v.type)
                 return False
 
         return True
