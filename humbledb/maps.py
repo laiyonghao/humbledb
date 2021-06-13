@@ -75,7 +75,8 @@ class NameMap(six.text_type):
 
         """
         _dict = self.__dict__
-        if (len(_dict) == 2
+        if (len(_dict) == 3
+                and '_type' in _dict
                 and '_key' in _dict
                 and '_default_value' in _dict):
             return True
