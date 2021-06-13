@@ -61,6 +61,9 @@ class Embed(Field):
                 continue
 
             _type = UNSET
+            if isinstance(value, tuple) and not isinstance(value[-1], type):
+                ''' Embed default is not supported. '''
+                continue
             if isinstance(value, tuple):
                 value, _type = value
             # Concatonate names
