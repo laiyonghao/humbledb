@@ -231,7 +231,7 @@ class DocumentMeta(type):
             else:
                 # Regular attributes are converted to name map objects as well
                 reverse_value = NameMap(name)
-                value = NameMap(value, saved_types.get(value))
+                value = NameMap(value, saved_types.get(value, UNSET))
                 # If the default value isn't callable, then we memoize it in
                 # the name map for later retrieval
                 if not callable(default):
