@@ -206,6 +206,8 @@ class DocumentMeta(type):
                 # We only look at tuples with length 2
                 if len(value) == 3:
                     value, default, field_type = value
+                    if not isinstance(field_type, type):
+                        continue
                 elif len(value) == 2:
                     value, default = value
                     # No default, but typed.
